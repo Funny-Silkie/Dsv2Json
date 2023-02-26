@@ -1,0 +1,5 @@
+Name,Index,Power,Luck,Deleted,
+string,int,float,int,bool,
+None,0,0,0,false
+Taro,1,49.5,16,true
+Saburo,2,112,58,false

@@ -26,6 +26,7 @@ namespace Dsv2Json
         private readonly SingleValueOption<TextReader?> optionIn;
         private readonly SingleValueOption<TextWriter?> optionOut;
         private readonly SingleValueOption<string> optionDelimiter;
+        private readonly FlagOption optionWithTypeAnotation;
 
         #endregion Options
 
@@ -53,11 +54,16 @@ namespace Dsv2Json
                 DefaultValue = ",",
                 Checker = (ValueChecker.NotEmpty() & ValueChecker.FromDelegate<string>(x => x!.Length == 1 ? ValueCheckState.Success : ValueCheckState.AsError("Delimiter must be a single character"))!)!,
             };
+            optionWithTypeAnotation = new FlagOption('t', "type-annotation")
+            {
+                Description = "Use 2nd row as type information",
+            };
 
             Options.Add(optionHelp);
             Options.Add(optionIn);
             Options.Add(optionOut);
             Options.Add(optionDelimiter);
+            Options.Add(optionWithTypeAnotation);
         }
 
         private static string[] ToStringArray(MatchCollection source)
@@ -80,6 +86,7 @@ namespace Dsv2Json
             using TextReader inReader = optionIn.Value ?? Console.In;
             using TextWriter outWriter = optionOut.Value ?? Console.Out;
             string delimiter = optionDelimiter.Value;
+            bool typeAnnotation = optionWithTypeAnotation.Value;
 
             string expression = CsvExpression;
             if (delimiter is not ",") expression = expression.Replace(",", delimiter);
@@ -95,39 +102,89 @@ namespace Dsv2Json
             Span<string> header = ToStringArray(regex.Matches(line));
             if (header.Length == 0 || (header.Length == 1 && header[0].Length == 0))
             {
-                SR.StdErr.WriteColored("Header row is empty", ConsoleColor.Red);
+                SR.StdErr.WriteLineColored("Header row is empty", ConsoleColor.Red);
                 return;
             }
             if (header[^1].Length == 0) header = header[..^1];
             if (header.ToArray().Distinct(StringComparer.Ordinal).Count() != header.Length)
             {
-                SR.StdErr.WriteColored("Header has duplicated elements", ConsoleColor.Red);
+                SR.StdErr.WriteLineColored("Header has duplicated elements", ConsoleColor.Red);
                 return;
             }
 
-            outWriter.WriteLine('[');
-
-            int index = 0;
-            while ((line = inReader.ReadLine()) is not null)
+            if (typeAnnotation)
             {
-                if (index++ > 0) outWriter.WriteLine(',');
-                string[] values = ToStringArray(regex.Matches(line));
-                if (values.Length == 0) continue;
-
-                var dictionary = new Dictionary<string, string>(header.Length, StringComparer.Ordinal);
-                if (header.Length >= values.Length)
+                line = inReader.ReadLine();
+                if (line is null)
                 {
-                    for (int i = 0; i < header.Length; i++) dictionary.Add(header[i], values[i]);
+                    SR.StdErr.WriteLineColored("Type annotation is not included", ConsoleColor.Red);
+                    return;
                 }
-                else
-                    for (int i = 0; i < values.Length; i++)
-                        dictionary.Add(header[i], values[i]);
-                string json = JsonSerializer.Serialize(dictionary, jsonSerializerOptions);
-                outWriter.Write(json);
-            }
+                Span<string> _annotations = ToStringArray(regex.Matches(line));
+                if (_annotations[^1].Length == 0) _annotations = _annotations[..^1];
 
-            outWriter.WriteLine();
-            outWriter.WriteLine(']');
+                TypeAnnotation[] annotation = Array.ConvertAll(_annotations.ToArray(), TypeAnnotation.Parse);
+                if (annotation.Length == 0)
+                {
+                    SR.StdErr.WriteLineColored("Type annotation row is empty", ConsoleColor.Red);
+                    return;
+                }
+                if (annotation.Length != header.Length)
+                {
+                    SR.StdErr.WriteLineColored("The amount of header elements is not equal to the amount of type annotations.", ConsoleColor.Red);
+                    return;
+                }
+
+                outWriter.WriteLine('[');
+
+                int index = 0;
+                while ((line = inReader.ReadLine()) is not null)
+                {
+                    if (index++ > 0) outWriter.WriteLine(',');
+                    string[] values = ToStringArray(regex.Matches(line));
+                    if (values.Length == 0) continue;
+
+                    var dictionary = new Dictionary<string, object?>(header.Length, StringComparer.Ordinal);
+                    if (header.Length >= values.Length)
+                    {
+                        for (int i = 0; i < values.Length; i++) dictionary.Add(header[i], annotation[i].Convert(values[i]));
+                    }
+                    else
+                        for (int i = 0; i < header.Length; i++)
+                            dictionary.Add(header[i], annotation[i].Convert(values[i]));
+                    string json = JsonSerializer.Serialize(dictionary, jsonSerializerOptions);
+                    outWriter.Write(json);
+                }
+
+                outWriter.WriteLine();
+                outWriter.WriteLine(']');
+            }
+            else
+            {
+                outWriter.WriteLine('[');
+
+                int index = 0;
+                while ((line = inReader.ReadLine()) is not null)
+                {
+                    if (index++ > 0) outWriter.WriteLine(',');
+                    string[] values = ToStringArray(regex.Matches(line));
+                    if (values.Length == 0) continue;
+
+                    var dictionary = new Dictionary<string, string>(header.Length, StringComparer.Ordinal);
+                    if (header.Length >= values.Length)
+                    {
+                        for (int i = 0; i < values.Length; i++) dictionary.Add(header[i], values[i]);
+                    }
+                    else
+                        for (int i = 0; i < header.Length; i++)
+                            dictionary.Add(header[i], values[i]);
+                    string json = JsonSerializer.Serialize(dictionary, jsonSerializerOptions);
+                    outWriter.Write(json);
+                }
+
+                outWriter.WriteLine();
+                outWriter.WriteLine(']');
+            }
         }
     }
 }
