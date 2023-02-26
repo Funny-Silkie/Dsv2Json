@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutPutType>Exe</OutPutType>
+    <TargetFrameWork>net7.0</TargetFrameWork>
+    <OutputPath>$(SolutionDir)Build\$(Configuration)</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CuiLib" Version="1.0.0" />
+  </ItemGroup>
+</Project>
