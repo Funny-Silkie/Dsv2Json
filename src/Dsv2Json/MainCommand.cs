@@ -51,7 +51,7 @@ namespace Dsv2Json
             {
                 Description = "Row delimiter of input file",
                 DefaultValue = ",",
-                Checker = (ValueChecker.NotEmpty() & ValueChecker.FromDelegate<string>(x => x!.Length == 1 ? ValueCheckState.Success : ValueCheckState.AsError("区切り文字は1文字である必要があります"))!)!,
+                Checker = (ValueChecker.NotEmpty() & ValueChecker.FromDelegate<string>(x => x!.Length == 1 ? ValueCheckState.Success : ValueCheckState.AsError("Delimiter must be a single character"))!)!,
             };
 
             Options.Add(optionHelp);
